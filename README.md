@@ -26,8 +26,13 @@ Most constants for update_config.py can be grabbed from watching requests with m
 $ pip install mitmproxy
 $ mitmproxy -p 8080 
 ```
-Set your proxy settings to use 8080, open Safari and watch for requests to `keyvalueservice.icloud.com`.
-
+Set your OSX HTTPS proxy settings to use 8080, open Safari and watch for requests to `keyvalueservice.icloud.com`.
+```bash
+$ open ~/.mitmproxy/mitmproxy-ca-cert.cer #add and trust this cert
+$ networksetup -getsecurewebproxy Ethernet
+$ networksetup -setsecurewebproxy Ethernet localhost 8080
+$ networksetup -setsecurewebproxystate Ethernet on
+```
 
 Chrome Extension
 ----------------

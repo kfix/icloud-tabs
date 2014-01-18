@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Format of request:
 # {
 #   "apns-token": "<data>",
@@ -37,30 +38,32 @@ import gzip
 import plistlib
 import biplist
 import base64
-from time import strftime, gmtime
+import time, datetime
 import uuid
-
+import pprint
 import os
 
 from update_config import *
 
 # Request Header Constants
-HOST = "p02-keyvalueservice.icloud.com"
-USER_AGENT = "SyncedDefaults/43.27 (Mac OS X 10.8.4 (12E55))"
-X_MME_CLIENT_INFO = "<MacBookAir4,2> <Mac OS X;10.8.4;12E55> <com.apple.SyncedDefaults/43.27>"
-X_APPLE_REQUEST_UUID = str(uuid.uuid4())
+HOST = "p13-keyvalueservice.icloud.com"
+USER_AGENT = "SyncedDefaults/91.30 (Mac OS X 10.9.1 (13B42))" #"SyncedDefaults/43.27 (Mac OS X 10.8.4 (12E55))"
+X_MME_CLIENT_INFO = "<Macmini3,1> <Mac OS X;10.9.1;13B42> <com.apple.SyncedDefaults/91.30>" #"<MacBookAir4,2> <Mac OS X;10.8.4;12E55> <com.apple.SyncedDefaults/43.27>"
+
+X_APPLE_REQUEST_UUID = str(uuid.uuid4()).upper()
 X_APPLE_SCHEDULER_ID = "com.apple.syncedpreferences.browser"
 
-def generate_plist(with_payload, tabs, registry_version="need-something-here"):
+def generate_plist(with_payload, tabs, uuid, name, registry_version="need-something-here"):
     b = {
-          "DeviceName": DEVICE_NAME,
-          "LastModified": strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()),
+          "DeviceName": name,
+          "LastModified": datetime.datetime.fromtimestamp(time.mktime(time.gmtime())),
           "Tabs": tabs
         }
 
     # Write b into a binary plist and base64 encode it.
     out = StringIO.StringIO()
     biplist.writePlist(b, out)
+    #plistlib.dump(b, out, fmt=plistlib.FMT_BINARY) #py3.4
     # There is a required 12 byte header here. Don't know what it's supposed to contain.
     b_encoded = "".join(map(chr, [1, 0, 0, 0, 0,  0, 0, 23, 0, 0, 0, 0])) + out.getvalue()
 
@@ -71,8 +74,8 @@ def generate_plist(with_payload, tabs, registry_version="need-something-here"):
               "bundle-id": "com.apple.Safari",
               "keys": [
                 {
-                  "data": plistlib.Data(b_encoded),
-                  "name": DEVICE_UUID # a unique id for your device
+                  "data": plistlib.Data(b_encoded), #bytes(b_encoded) py3.4
+                  "name": uuid # a unique id for your device
                 }
               ],
               "kvstore-id": "com.apple.Safari.SyncedTabs",
@@ -105,7 +108,7 @@ def ungzip(s):
     return html
 
 def make_request(body):
-  URL = "https://p02-keyvalueservice.icloud.com/sync"
+  URL = "https://%s/sync" % HOST
 
   zippedbody = dogzip(body)
 
@@ -114,15 +117,15 @@ def make_request(body):
       "User-Agent" : USER_AGENT,
       "Accept": "*/*",
       "Content-Encoding": "gzip",
+      "Accept-Language": "en-us",
+      "Accept-Encoding": "gzip, deflate",
+      "Content-Type": "text/xml", #"application/x-www-form-urlencoded",
+      "Authorization": AUTHORIZATION,
+      "Connection": "keep-alive", #being turned to close
+      "Proxy-Connection": "keep-alive",
       "X-MMe-Client-Info": X_MME_CLIENT_INFO,
       "X-Apple-Request-UUID": X_APPLE_REQUEST_UUID,
       "X-Apple-Scheduler-ID": X_APPLE_SCHEDULER_ID,
-      "Accept-Language": "en-us",
-      "Accept-Encoding": "gzip, deflate",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Authorization": AUTHORIZATION,
-      "Connection": "keep-alive",
-      "Proxy-Connection": "keep-alive",
       "Content-Length": len(zippedbody)
       }, 
       data=zippedbody)
@@ -134,15 +137,22 @@ def make_request(body):
 
 def update_tabs(tabs):
   # First make an empty (without tab data) request to get the latest registry string.
-  payload_plist = generate_plist(False, [])
+  payload_plist = generate_plist(False, [], DEVICE_UUID, DEVICE_NAME)
   response = make_request(payload_plist)
   response_plist = plistlib.readPlistFromString(response)
-
   registry_version = response_plist["apps"][0]["registry-version"]
 
+  #print plistlib.writePlistToString(response_plist) 
+  print registry_version
+  # dump current tabs
+  for device in response_plist["apps"][0]["keys"]:
+     pprint.pprint(biplist.readPlistFromString(device["data"].data[12:]))
+     #print plistlib.loads(device["data"][12:], fmt=plistlib.FMT_BINARY) #py3.4
+
   # Next use that string to make a request with a payload of tabs.
-  payload_plist = generate_plist(True, tabs, registry_version=registry_version)
-  make_request(payload_plist)
+  payload_plist = generate_plist(True, tabs, DEVICE_UUID, DEVICE_NAME, registry_version=registry_version)
+  upd_response = make_request(payload_plist)
+  print plistlib.writePlistToString(plistlib.readPlistFromString(upd_response)) #dump update confirmation
 
 if __name__ == '__main__':
   TABS = [
@@ -156,4 +166,4 @@ if __name__ == '__main__':
           }
         ]
 
-  updateTabs(TABS)
+  update_tabs(TABS)
