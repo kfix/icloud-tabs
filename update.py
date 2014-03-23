@@ -46,12 +46,24 @@ import os
 from update_config import *
 
 # Request Header Constants
-HOST = "p13-keyvalueservice.icloud.com"
+ICLOUD_SERVICE = "keyvalueservice.icloud.com"
 USER_AGENT = "SyncedDefaults/91.30 (Mac OS X 10.9.1 (13B42))" #"SyncedDefaults/43.27 (Mac OS X 10.8.4 (12E55))"
 X_MME_CLIENT_INFO = "<Macmini3,1> <Mac OS X;10.9.1;13B42> <com.apple.SyncedDefaults/91.30>" #"<MacBookAir4,2> <Mac OS X;10.8.4;12E55> <com.apple.SyncedDefaults/43.27>"
 
 X_APPLE_REQUEST_UUID = str(uuid.uuid4()).upper()
 X_APPLE_SCHEDULER_ID = "com.apple.syncedpreferences.browser"
+
+#what a pile, replace with http://docs.python-requests.org/en/latest/ someday
+class iCloudNodeRedirectHandler(urllib2.HTTPRedirectHandler):
+    def http_error_330(self, req, fp, code, msg, headers):
+        '''330 received when apple wants us to redirect to a specific server node for a service after requesting something from its top-level CNAME'''
+	mme_server = headers['X-Apple-MMe-Host'] #icloud server node: `p<00-NN>-exampleservice.icloud.com`
+	newhdr = req.headers
+	newhdr['Host'] = mme_server
+	newurl = "%s://%s%s" % ( req.get_type(), mme_server, req.get_selector() )
+	newreq = urllib2.Request(newurl, req.data, newhdr)
+        return urllib2.urlopen(newreq)
+icl_urlopen = urllib2.build_opener(iCloudNodeRedirectHandler)
 
 def generate_plist(with_payload, tabs, uuid, name, registry_version="need-something-here"):
     b = {
@@ -108,12 +120,12 @@ def ungzip(s):
     return html
 
 def make_request(body):
-  URL = "https://%s/sync" % HOST
+  URL = "https://%s/sync" % ICLOUD_SERVICE
 
   zippedbody = dogzip(body)
 
   request = urllib2.Request(URL, headers={
-      "Host": HOST,
+      "Host": ICLOUD_SERVICE,
       "User-Agent" : USER_AGENT,
       "Accept": "*/*",
       "Content-Encoding": "gzip",
@@ -130,7 +142,14 @@ def make_request(body):
       }, 
       data=zippedbody)
 
-  u = urllib2.urlopen(request)
+  try:
+      u = icl_urlopen.open(request)
+  except urllib2.HTTPError, error:
+      print 'E: POST %s => %s: %s' % (error.url, error.code, error.reason)
+      print error.headers
+      print error.read()
+      raise urllib2.HTTPError, error
+
   data = u.read()
 
   return ungzip(data)
