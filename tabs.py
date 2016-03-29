@@ -79,8 +79,11 @@ def generate_plist(with_payload, tabs, uuid, name, registry_version="need-someth
     # There is a required 12 byte header here. Don't know what it's supposed to contain.
     b_encoded = "".join(map(chr, [1, 0, 0, 0, 0,  0, 0, 23, 0, 0, 0, 0])) + out.getvalue()
 
+    #codesign --display --entitlements - /Applications/Safari.app
+    #https://developer.apple.com/library/ios/documentation/General/Conceptual/iCloudDesignGuide/Chapters/iCloudFundametals.html
+    #http://www.undsoversum.de/2012/09/11/about-apns-tokens-and-duplicate-udids/
     p = {
-          "apns-token": plistlib.Data(APNS_TOKEN),
+          #"apns-token": plistlib.Data(APNS_TOKEN),
           "apps": [
             {
               "bundle-id": "com.apple.Safari",
@@ -154,7 +157,7 @@ def make_request(body):
 
   return ungzip(data)
 
-def update_tabs(tabs):
+def get_tabs():
   # First make an empty (without tab data) request to get the latest registry string.
   payload_plist = generate_plist(False, [], DEVICE_UUID, DEVICE_NAME)
   response = make_request(payload_plist)
@@ -168,10 +171,15 @@ def update_tabs(tabs):
      pprint.pprint(biplist.readPlistFromString(device["data"].data[12:]))
      #print plistlib.loads(device["data"][12:], fmt=plistlib.FMT_BINARY) #py3.4
 
-  # Next use that string to make a request with a payload of tabs.
+  return (registry_version, response_plist)
+
+def update_tabs(tabs):
+  registry_version, response_plist = get_tabs()
   payload_plist = generate_plist(True, tabs, DEVICE_UUID, DEVICE_NAME, registry_version=registry_version)
   upd_response = make_request(payload_plist)
   print plistlib.writePlistToString(plistlib.readPlistFromString(upd_response)) #dump update confirmation
+
+
 
 if __name__ == '__main__':
   TABS = [
@@ -184,5 +192,11 @@ if __name__ == '__main__':
             "URL": "http://stuffonmycat.com/"
           }
         ]
-
-  update_tabs(TABS)
+  #update_tabs([]) #purge tabs. ICLOUD_SERVICE auto-purges in 2 weeks if never updated again.
+  #update_tabs(TABS)
+  get_tabs()
+  # TODO: optparse flags for
+  #  conffile path 
+  #  modes:
+  #     get (device-name) > JSON
+  #     update (device-name) (<) JSON

@@ -5,27 +5,31 @@ Update iCloud tabs without Safari.
 
 **This may mess up your iCloud account or your Safari.app config-cache, perhaps if/when Apple changes their API. Use at your own risk.**
 
-Try it on your iCloud-enabled Mac
+Automagic configuration
 -------
+If you are on an iCloud-enabled OSX, configuration to match your Safari is fully automatic.  
+If you are using anything else, you will need to type in your iCloud login when asked to generate a new device config.  
 ```bash
 $ pip install -r requirements.txt
-$ gen_update_config.py > update_config.py
+$ gen_update_config.py | tee update_config.py
+iCloud username: someone@example.com
+DEVICE_NAME = 'somecomputer'
+AUTHORIZATION = 'X-MobileMe-AuthToken .....'
+DEVICE_UUID = <128-bit uuidgen>
 ```
 
-Check your credentials in update_config.py and change `DEVICE_NAME` to a testing name.  
-Then edit the tabs list in update.py and run it to upload them to iCloud:
+Feel free to change `DEVICE_NAME` and `DEVICE_UUID` for testing purposes. Safari.app will always overwrite whatever iCloud
+has with its current tab set, so fear not losing your currently open tabs.
+  
+Edit the tabs list in update.py and run it to upload them to iCloud:
 ```bash
 $ python update.py
 ```
 You should see the tabs in your other iCloud-linked Safaris at this point.  
-You can now run this from any pythonic computer with no Apple bits required.  
-
-[iCloud purges un-updated tabs](http://support.apple.com/kb/HT5372?viewlocale=en_US&locale=en_US) after 2 weeks. Use `update_tabs([])` to purge them manually.
-
 
 Config (the hard way)
 ------
-Most constants for update_config.py.template can be grabbed from watching requests with mitmproxy:
+Most constants for update_config.py.template can be grabbed from watching HTTP requests with mitmproxy:
 
 ```bash
 $ pip install mitmproxy
